@@ -59,6 +59,47 @@ Note: You **MUST** keep in mind that both applications (the CAS server and the s
 # cas.mgmt.authzAttributes[1]=groupMembership
 ````
 
+### LDAP Authorization
+````
+# cas.mgmt.ldap.ldapAuthz.groupAttribute=
+# cas.mgmt.ldap.ldapAuthz.groupPrefix=
+# cas.mgmt.ldap.ldapAuthz.groupFilter=
+# cas.mgmt.ldap.ldapAuthz.groupBaseDn=
+# cas.mgmt.ldap.ldapAuthz.rolePrefix=ROLE_
+# cas.mgmt.ldap.ldapAuthz.roleAttribute=uugid
+# cas.mgmt.ldap.ldapAuthz.searchFilter=cn={user}
+# cas.mgmt.ldap.ldapAuthz.baseDn=
+
+# cas.mgmt.ldap.allowMultipleResults=false
+# cas.mgmt.ldap.baseDn=dc=example,dc=org
+# cas.mgmt.ldap.ldapUrl=ldaps://ldap1.example.edu ldaps://ldap2.example.edu
+# cas.mgmt.ldap.connectionStrategy=
+# cas.mgmt.ldap.baseDn=dc=example,dc=org
+# cas.mgmt.ldap.userFilter=cn={user}
+# cas.mgmt.ldap.bindDn=cn=Directory Manager,dc=example,dc=org
+# cas.mgmt.ldap.bindCredential=Password
+# cas.mgmt.ldap.providerClass=org.ldaptive.provider.unboundid.UnboundIDProvider
+# cas.mgmt.ldap.connectTimeout=5000
+# cas.mgmt.ldap.trustCertificates=
+# cas.mgmt.ldap.keystore=
+# cas.mgmt.ldap.keystorePassword=
+# cas.mgmt.ldap.keystoreType=JKS|JCEKS|PKCS12
+# cas.mgmt.ldap.poolPassivator=NONE|CLOSE|BIND
+# cas.mgmt.ldap.minPoolSize=3
+# cas.mgmt.ldap.maxPoolSize=10
+# cas.mgmt.ldap.validateOnCheckout=true
+# cas.mgmt.ldap.validatePeriodically=true
+# cas.mgmt.ldap.validatePeriod=600
+# cas.mgmt.ldap.validateTimeout=5000
+# cas.mgmt.ldap.failFast=true
+# cas.mgmt.ldap.idleTime=500
+# cas.mgmt.ldap.prunePeriod=600
+# cas.mgmt.ldap.blockWaitTime=5000
+# cas.mgmt.ldap.subtreeSearch=true
+# cas.mgmt.ldap.useSsl=true
+# cas.mgmt.ldap.useStartTls=false
+````
+
 # Deployment
 
 ## Embedded Tomcat
