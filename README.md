@@ -60,6 +60,7 @@ Note: You **MUST** keep in mind that both applications (the CAS server and the s
 ````
 
 ### LDAP Authorization
+Note: Most deployments do not need the authz rules. Implement only what you need!
 ````
 # cas.mgmt.ldap.ldapAuthz.groupAttribute=
 # cas.mgmt.ldap.ldapAuthz.groupPrefix=
