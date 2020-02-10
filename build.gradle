@@ -32,6 +32,10 @@ def casMgmtServerVersion = project.'casmgmt.version'
 
 project.ext."casMgmtServerVersion" = casMgmtServerVersion
 
+configurations.all {
+    exclude module: 'HikariCP-java7'
+}
+
 eclipse {
     classpath {
        downloadSources = true
@@ -103,7 +107,8 @@ bootWar {
         cas {
             from "org.apereo.cas:cas-mgmt-webapp${project.appServer}:${casMgmtServerVersion}@war"
             provided = false
-            excludes = []
+            // excludes = []
+	    excludes = ["**/cas-mgmt-config-version-control*.jar", "**/cas-mgmt-config-delegated*.jar", "**/HikariCP-java7-2.4.13.jar"]
         }
     }    
 }
