@@ -1,0 +1,320 @@
+import org.apache.tools.ant.taskdefs.condition.*
+import org.gradle.internal.logging.text.*
+import org.apereo.cas.metadata.*
+import java.nio.file.*
+import static org.gradle.internal.logging.text.StyledTextOutput.Style
+
+buildscript {
+    repositories {
+        mavenLocal()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+    dependencies {
+        classpath "org.springframework.boot:spring-boot-gradle-plugin:${project.springBootVersion}"
+        classpath "io.freefair.gradle:maven-plugin:${project.gradleFreeFairPluginVersion}"
+        classpath "io.freefair.gradle:lombok-plugin:${project.gradleFreeFairPluginVersion}"
+        classpath "io.spring.gradle:dependency-management-plugin:${project.gradleDependencyManagementPluginVersion}"
+        classpath "gradle.plugin.com.google.cloud.tools:jib-gradle-plugin:${project.jibVersion}"
+
+    }
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+    jcenter()
+    maven { url 'https://oss.sonatype.org/content/repositories/releases' }
+    maven {
+        url 'https://oss.sonatype.org/content/repositories/snapshots'
+        mavenContent { snapshotsOnly() }
+    }
+    maven { url 'https://build.shibboleth.net/nexus/content/repositories/releases/' }
+}
+
+apply plugin: "io.spring.dependency-management"
+apply plugin: "io.freefair.war-overlay"
+apply plugin: "war"
+apply plugin: "org.springframework.boot"
+
+apply from: rootProject.file("gradle/jib.gradle")
+
+dependencyManagement {
+    imports {
+        mavenBom "org.apereo.cas:cas-mgmt-support-bom:${project.'casmgmt.version'}"
+        mavenBom "org.apereo.cas:cas-server-support-bom:${project.'cas.version'}"
+    }
+}
+
+configurations.all {
+    resolutionStrategy {
+        cacheChangingModulesFor 0, "seconds"
+        cacheDynamicVersionsFor 0, "seconds"
+        preferProjectModules()
+        def failIfConflict = project.hasProperty("failOnVersionConflict") && Boolean.valueOf(project.getProperty("failOnVersionConflict"))
+        if (failIfConflict) {
+            failOnVersionConflict()
+        }
+    }
+}
+
+war {
+    entryCompression = ZipEntryCompression.STORED
+}
+
+task run(group: "build", description: "Run the CAS web application in embedded container mode") {
+    dependsOn 'build'
+    doLast {
+        def casRunArgs = Arrays.asList("-server -noverify -Xmx2048M -XX:+TieredCompilation -XX:TieredStopAtLevel=1".split(" "))
+        javaexec {
+            main = "-jar"
+            jvmArgs = casRunArgs
+            args = ["build/libs/app.war"]
+            systemProperties = System.properties
+            logger.info "Started ${commandLine}"
+        }
+    }
+}
+
+task setExecutable(group: "CAS", description: "Configure the project to run in executable mode") {
+    doFirst {
+        project.setProperty("executable", "true")
+        logger.info "Configuring the project as executable"
+    }
+}
+
+task executable(type: Exec, group: "CAS", description: "Run the CAS web application in standalone executable mode") {
+    dependsOn setExecutable, 'build'
+    doFirst {
+        workingDir "."
+        if (!Os.isFamily(Os.FAMILY_WINDOWS)) {
+            commandLine "chmod", "+x", bootWar.archivePath
+        }
+        logger.info "Running ${bootWar.archivePath}"
+        commandLine bootWar.archivePath
+    }
+}
+
+task debug(group: "CAS", description: "Debug the CAS web application in embedded mode on port 5005") {
+    dependsOn 'build'
+    doLast {
+        logger.info "Debugging process is started in a suspended state, listening on port 5005."
+        def casArgs = Arrays.asList("-Xmx2048M".split(" "))
+        javaexec {
+            main = "-jar"
+            jvmArgs = casArgs
+            debug = true
+            args = ["build/libs/app.war"]
+            systemProperties = System.properties
+            logger.info "Started ${commandLine}"
+        }
+    }
+}
+
+task showConfiguration(group: "CAS", description: "Show configurations for each dependency, etc") {
+    doLast() {
+        def cfg = project.hasProperty("configuration") ? project.property("configuration") : "compile"
+        configurations.getByName(cfg).each { println it }
+    }
+}
+
+task allDependenciesInsight(group: "build", type: DependencyInsightReportTask, description: "Produce insight information for all dependencies") {}
+
+task allDependencies(group: "build", type: DependencyReportTask, description: "Display a graph of all project dependencies") {}
+
+task casVersion(group: "CAS", description: "Display the current CAS version") {
+    doFirst {
+        def verbose = project.hasProperty("verbose") && Boolean.valueOf(project.getProperty("verbose"))
+        if (verbose) {
+            def out = services.get(StyledTextOutputFactory).create("CAS")
+            println "******************************************************************"
+            out.withStyle(Style.Info).println "Apereo CAS ${project.version}"
+            out.withStyle(Style.Description).println "Enterprise Single SignOn for all earthlings and beyond"
+            out.withStyle(Style.SuccessHeader).println "- GitHub: "
+            out.withStyle(Style.Success).println "https://github.com/apereo/cas"
+            out.withStyle(Style.SuccessHeader).println "- Docs: "
+            out.withStyle(Style.Success).println "https://apereo.github.io/cas"
+            out.withStyle(Style.SuccessHeader).println "- Blog: "
+            out.withStyle(Style.Success).println "https://apereo.github.io"
+            println "******************************************************************"
+        } else {
+            println project.version
+        }
+    }
+}
+
+task springBootVersion(description: "Display current Spring Boot version") {
+    doLast {
+        println rootProject.springBootVersion
+    }
+}
+
+task containerImageCoords(group: "CAS", description: "Display the coordinates for the container image") {
+    doFirst {
+         println "${project.'containerImageOrg'}/${project.'containerImageName'}:${project.version}"
+    }
+}
+
+task createKeystore(group: "CAS", description: "Create CAS keystore") {
+    doFirst {
+        def certDir = project.getProperty("certDir")
+        def serverKeyStore = project.getProperty("serverKeystore")
+        def exportedServerCert = project.getProperty("exportedServerCert")
+        def storeType = project.getProperty("storeType")
+        def keystorePath = "$certDir/$serverKeyStore"
+        def serverCert = "$certDir/$exportedServerCert"
+        
+        mkdir certDir
+
+        def dn = "CN=cas.example.org,OU=Example,OU=Org,C=US"
+        if (project.hasProperty("certificateDn")) {
+            dn = project.getProperty("certificateDn")
+        }
+        def subjectAltName = "dns:example.org,dns:localhost,ip:127.0.0.1"
+        if (project.hasProperty("certificateSubAltName")) {
+            subjectAltName = project.getProperty("certificateSubAltName")
+        }
+        // this will fail if thekeystore exists and has cert with cas alias already (so delete if you want to recreate)
+        logger.info "Generating keystore for CAS with DN ${dn}"
+        exec {
+            workingDir "."
+            commandLine "keytool", "-genkeypair", "-alias", "cas",
+                    "-keyalg", "RSA",
+                    "-keypass", "changeit", "-storepass", "changeit",
+                    "-keystore", keystorePath,
+                    "-dname", dn, "-ext", "SAN=${subjectAltName}",
+                    "-storetype", storeType
+        }
+        logger.info "Exporting cert from keystore..."
+        exec {
+            workingDir "."
+            commandLine "keytool", "-exportcert", "-alias", "cas",
+                    "-storepass", "changeit", "-keystore", keystorePath,
+                    "-file", serverCert
+        }
+        logger.info "Import $serverCert into your Java truststore (\$JAVA_HOME/lib/security/cacerts)"
+    }
+}
+
+task unzipWAR(type: Copy, group: "CAS", description: "Explodes the CAS web application archive") {
+    dependsOn 'build'
+    from zipTree("build/libs/app.war")
+    into "${buildDir}/app"
+    doLast {
+        println "Unzipped WAR into ${buildDir}/app"
+    }
+}
+
+task verifyRequiredJavaVersion {
+    def currentVersion = org.gradle.api.JavaVersion.current()
+    logger.info "Checking current Java version ${currentVersion} for required Java version ${project.targetCompatibility}"
+    if (!currentVersion.name.equalsIgnoreCase("${project.targetCompatibility}")) {
+        throw new GradleException("Current Java version ${currentVersion} does not match required Java version ${project.targetCompatibility}")
+    }
+}
+
+task copyCasConfiguration(type: Copy, group: "CAS",
+        description: "Copy the CAS configuration from this project to /etc/cas/config") {
+    from "etc/cas/config"
+    into new File('/etc/cas/config').absolutePath
+    doFirst {
+        new File('/etc/cas/config').mkdirs()
+    }
+}
+
+
+
+springBoot {
+    buildInfo()
+
+
+
+
+    mainClassName = "org.apereo.cas.mgmt.web.CasManagementWebApplication"
+
+}
+
+sourceSets {
+    bootRunSources {
+        resources {
+            srcDirs new File("//etc/cas/templates/"), new File("${project.getProjectDir()}/src/main/resources/")
+        }
+    }
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(project.targetCompatibility)
+    }
+}
+
+bootBuildImage {
+    imageName = "${project.'containerImageOrg'}/${project.'containerImageName'}:${project.version}"
+}
+
+
+dependencies {
+    /**
+     * CAS dependencies and modules may be listed here.
+     *
+     * There is no need to specify the version number for each dependency
+     * since versions are all resolved and controlled by the dependency management
+     * plugin via the CAS bom.
+     **/
+
+
+
+
+    compileOnly "org.apereo.cas:cas-mgmt-webapp-init"
+    
+    
+    developmentOnly "org.springframework.boot:spring-boot-devtools"
+}
+
+bootWar {
+    def executable = project.hasProperty("executable") && Boolean.valueOf(project.getProperty("executable"))
+    if (executable) {
+        logger.info "Including launch script for executable WAR artifact"
+        launchScript()
+    } else {
+        logger.info "WAR artifact is not marked as an executable"
+    }
+
+    archiveName "app.war"
+    baseName "app"
+
+    entryCompression = ZipEntryCompression.STORED
+
+    /*
+        attachClasses = true
+        classesClassifier = 'classes'
+        archiveClasses = true
+    */
+
+    overlays {
+        /*
+            https://docs.freefair.io/gradle-plugins/current/reference/#_io_freefair_war_overlay
+            Note: The "excludes" property is only for files in the war dependency.
+            If a jar is excluded from the war, it could be brought back into the final war as a dependency
+            of non-war dependencies. Those should be excluded via normal gradle dependency exclusions.
+        */
+        cas {
+
+
+            from "org.apereo.cas:cas-mgmt-webapp${project.appServer}:${project.'casmgmt.version'}@war"
+
+
+
+            provided = false
+            excludes = ["WEB-INF/lib/servlet-api-2*.jar"]
+            
+            /*
+            excludes = ["WEB-INF/lib/somejar-1.0*"]
+            enableCompilation = true
+            includes = ["*.xyz"]
+            targetPath = "sub-path/bar"
+            skip = false
+            */
+        }
+    }
+}
