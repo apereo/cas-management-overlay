@@ -1,3 +1,4 @@
+# IMPORTANT NOTE<br/>******************************************************<br/>This repository is always automatically generated from the [CAS Initializr](https://github.com/apereo/cas-initializr). Do NOT submit pull requests here as the change-set will be overwritten on the next sync. To learn more, please visit the [CAS documentation](https://apereo.github.io/cas).<br/>******************************************************<br/>
 Apereo CAS WAR Overlay Template
 =====================================
 
@@ -192,5 +193,3 @@ Spring Boot applications such as CAS, and the image is layered efficiently.
 
 The first build might take a long time because it has to download some container
 images and the JDK, but subsequent builds should be fast.
-
-
